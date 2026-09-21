@@ -41,7 +41,7 @@ Y_FRAME_ROBOTIQ_HOME_POSE: tuple[float, ...] = (
 ROBOTENV_DIM_LABELS: tuple[str, ...] = tuple(
     f"{side}_{label}" for side in ARMS for label in ("dx", "dy", "dz", "gripper")
 )
-ROBOTENV_ACTION_LOW = np.asarray((-0.02, -0.02, -0.02, -0.2) * len(ARMS), dtype=np.float64)
+ROBOTENV_ACTION_LOW = np.asarray((-0.05, -0.05, -0.05, -0.2) * len(ARMS), dtype=np.float64)
 ROBOTENV_ACTION_HIGH = -ROBOTENV_ACTION_LOW
 ROBOTENV_ACTION_SEMANTICS = ActionSemantics(
     control_mode="eef_delta_pos",

@@ -174,7 +174,7 @@ pair with three cameras (`exterior_cam`, `left_wrist_cam`, `right_wrist_cam`).
 The direct embodiment keeps the 16-D absolute `joint_pos` contract. The
 RobotEnv embodiment declares an 8-D `eef_delta_pos` contract: world-frame
 `dx`, `dy`, `dz`, and open-positive gripper delta for each arm. Each control
-step is limited to 2 cm of translation and 0.2 normalized gripper travel;
+step is limited to 5 cm of translation and 0.2 normalized gripper travel;
 end-effector rotation stays fixed. Homing and parking still use the validated
 RCI joint reset poses.
 

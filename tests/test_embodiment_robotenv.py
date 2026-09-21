@@ -368,7 +368,7 @@ def test_registered_embodiment_clamps_and_sends_cartesian_deltas() -> None:
 
     for driver in (left, right):
         xyz, gripper = driver.cartesian_commands[-1]
-        assert xyz == pytest.approx([0.02, -0.02, 0.01])
+        assert xyz == pytest.approx([0.05, -0.05, 0.01])
         assert gripper == pytest.approx(-0.2)
     assert result.terminated is False
     with pytest.raises(ValueError, match="expected an 8-D vector"):
