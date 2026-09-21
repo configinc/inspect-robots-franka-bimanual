@@ -311,6 +311,15 @@ inspect-robots "hand the red block from the left arm to the right arm" \
     -P model=openai/gpt-6-astra
 ```
 
+To test homing, cameras, logs, and video export without an API key, run the
+API-free hold policy. It echoes the observed 16-D state and does not interpret
+the instruction:
+
+```bash
+inspect-robots run --instruction "record the stationary bimanual rig" \
+    --policy bimanual_hold --embodiment franka_bimanual_robotenv --max-steps 75
+```
+
 ### Two-arm behavior:
 
 - **One action, both arms.** `step()` clamps the 16-D command, sends the left

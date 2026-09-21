@@ -48,6 +48,7 @@ franka_bimanual = "inspect_robots_franka.embodiment_bimanual:BimanualFrankaEmbod
 franka_bimanual_robotenv = "inspect_robots_franka.embodiment_robotenv:BimanualRobotEnvEmbodiment"
 
 [project.entry-points."inspect_robots.policies"]
+bimanual_hold = "inspect_robots_franka.policy_bimanual_hold:BimanualHoldPolicy"
 openpi = "inspect_robots_franka.policy:OpenpiPolicy"
 
 [project.scripts]
