@@ -382,6 +382,41 @@ def test_registered_embodiment_clamps_and_sends_cartesian_deltas() -> None:
     assert result.termination_reason == "success"
 
 
+def test_registered_embodiment_can_use_joint_position_control() -> None:
+    left = _CartesianFakeDriver()
+    right = _CartesianFakeDriver()
+    drivers = iter((left, right))
+    image = np.zeros((2, 3, 3), dtype=np.uint8)
+    embodiment = BimanualRobotEnvEmbodiment(
+        control_mode="joint_pos",
+        left_hostname="localhost:50061",
+        right_hostname="localhost:50063",
+        unattended=True,
+        driver_factory=lambda _cfg: next(drivers),
+        camera_reader=lambda: {
+            "exterior_cam": image,
+            "left_wrist_cam": image,
+            "right_wrist_cam": image,
+        },
+        sleep_fn=lambda _delay: None,
+        clock=lambda: 0.0,
+    )
+    embodiment.reset(Scene(id="s", instruction="test joint motion"))
+    target = np.asarray(Y_FRAME_ROBOTIQ_HOME_POSE) + 0.01
+    embodiment.step(Action(data=target))
+
+    assert embodiment.info.action_space.shape == (16,)
+    assert embodiment.info.action_space.semantics.control_mode == "joint_pos"
+    assert left.joints == pytest.approx(target[:7])
+    assert right.joints == pytest.approx(target[8:15])
+    assert left.cartesian_commands == right.cartesian_commands == []
+
+
+def test_registered_embodiment_rejects_unknown_control_mode() -> None:
+    with pytest.raises(ValueError, match="control_mode must be"):
+        BimanualRobotEnvEmbodiment(control_mode="joint_vel")
+
+
 def test_y_frame_robotiq_home_pose_matches_rci() -> None:
     assert Y_FRAME_ROBOTIQ_HOME_POSE == (
         0.0122,

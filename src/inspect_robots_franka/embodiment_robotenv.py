@@ -243,9 +243,14 @@ class BimanualRobotEnvEmbodiment(BimanualFrankaEmbodiment):
         self,
         config: BimanualFrankaConfig | None = None,
         *,
+        control_mode: str = "eef_delta_pos",
         driver_factory: DriverFactory | None = None,
         **kwargs: Any,
     ) -> None:
+        if control_mode not in {"eef_delta_pos", "joint_pos"}:
+            raise ValueError(
+                f"control_mode must be 'eef_delta_pos' or 'joint_pos', got {control_mode!r}"
+            )
         if config is None:
             kwargs.setdefault("home_pose", Y_FRAME_ROBOTIQ_HOME_POSE)
             kwargs.setdefault("rest_pose", kwargs["home_pose"])
@@ -254,6 +259,10 @@ class BimanualRobotEnvEmbodiment(BimanualFrankaEmbodiment):
             driver_factory=driver_factory or robotenv_driver_factory,
             **kwargs,
         )
+        self._control_mode = control_mode
+        if control_mode == "joint_pos":
+            self.info = dataclasses.replace(self.info, name="franka_bimanual_robotenv")
+            return
         docs = (
             "Two Franka arms controlled by position-only Cartesian deltas in the shared "
             "Y-frame world coordinates. Use move_by with left_dx/left_dy/left_dz or "
@@ -274,6 +283,8 @@ class BimanualRobotEnvEmbodiment(BimanualFrankaEmbodiment):
 
     def step(self, action: Action) -> StepResult:
         """Send bounded XYZ and gripper deltas to both RobotEnv services."""
+        if self._control_mode == "joint_pos":
+            return super().step(action)
         drivers = cast(Mapping[str, CartesianDriver], self._require_drivers())
         self.num_steps += 1
         command = np.asarray(action.data, dtype=np.float64)

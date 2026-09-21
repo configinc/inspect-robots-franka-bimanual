@@ -313,6 +313,11 @@ inspect-robots "stack both cubes on the plate" \
 inspect-robots "hand the red block from the left arm to the right arm" \
     --policy agent --embodiment franka_bimanual_robotenv \
     -P model=openai/gpt-6-astra
+
+# use RobotEnv's 16-D absolute joint-position control instead
+inspect-robots "hand the red block from the left arm to the right arm" \
+    --policy agent --embodiment franka_bimanual_robotenv \
+    -E control_mode=joint_pos -P model=openai/gpt-6-astra
 ```
 
 To test homing, cameras, logs, and video export without an API key, run the
