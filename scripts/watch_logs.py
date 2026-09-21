@@ -65,6 +65,7 @@ def embed_video_gallery(report: Path, videos: list[Path]) -> None:
 .sync-video-controls input { flex:1; }
 </style>
 <script>
+document.addEventListener('DOMContentLoaded', () => {
 document.querySelectorAll('[data-sync-gallery="true"]').forEach((gallery) => {
   const videos = Array.from(gallery.querySelectorAll('video'));
   const button = gallery.querySelector('button');
@@ -101,6 +102,7 @@ document.querySelectorAll('[data-sync-gallery="true"]').forEach((gallery) => {
   });
   videos[0]?.addEventListener('timeupdate', update);
   videos.forEach((video) => video.addEventListener('loadedmetadata', update));
+});
 });
 </script>
 """
