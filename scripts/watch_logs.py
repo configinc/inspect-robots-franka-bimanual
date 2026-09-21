@@ -4,10 +4,29 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import html as html_lib
 import json
 import subprocess
 import time
 from pathlib import Path
+
+
+def embed_video_gallery(report: Path, videos: list[Path]) -> None:
+    """Add camera videos when the upstream report has no transcript-led composite."""
+    if not report.exists() or not videos:
+        return
+    document = report.read_text()
+    if "data:video/mp4" in document:
+        return
+    players = "".join(
+        f"<h3>{html_lib.escape(video.stem)}</h3><video controls muted "
+        f'style="width:100%;max-width:960px" src="data:video/mp4;base64,'
+        f'{base64.b64encode(video.read_bytes()).decode()}"></video>'
+        for video in videos
+    )
+    gallery = f'<section class="scene"><h2>Run videos</h2>{players}</section>'
+    report.write_text(document.replace("</main>", gallery + "</main>"))
 
 
 def render_completed(log_dir: Path) -> None:
@@ -21,9 +40,10 @@ def render_completed(log_dir: Path) -> None:
         except (OSError, json.JSONDecodeError):
             continue
         html = log_dir / "html" / f"{log.stem}.html"
-        if html.exists() and html.stat().st_mtime >= log.stat().st_mtime:
-            continue
         videos = log_dir / "videos" / log.stem
+        if html.exists() and html.stat().st_mtime >= log.stat().st_mtime:
+            embed_video_gallery(html, sorted(videos.glob("*.mp4")))
+            continue
         subprocess.run(
             ["inspect-robots", "video", str(log), "--out", str(videos)],
             check=False,
@@ -32,6 +52,7 @@ def render_completed(log_dir: Path) -> None:
             ["inspect-robots", "view", str(log), "--out", str(html), "--force"],
             check=True,
         )
+        embed_video_gallery(html, sorted(videos.glob("*.mp4")))
 
 
 def main() -> None:
