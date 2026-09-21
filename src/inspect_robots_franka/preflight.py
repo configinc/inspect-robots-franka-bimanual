@@ -16,12 +16,17 @@ from inspect_robots_franka.config import FrankaConfig, OpenpiConfig
 from inspect_robots_franka.config_bimanual import BimanualFrankaConfig
 from inspect_robots_franka.embodiment import FrankaEmbodiment
 from inspect_robots_franka.embodiment_bimanual import BimanualFrankaEmbodiment
+from inspect_robots_franka.embodiment_robotenv import BimanualRobotEnvEmbodiment
 from inspect_robots_franka.policy import OpenpiPolicy
 
 CheckFn = Callable[..., CompatibilityReport]
 Embodiment = FrankaEmbodiment | BimanualFrankaEmbodiment
 
-EMBODIMENTS: tuple[str, ...] = ("franka", "franka_bimanual")
+EMBODIMENTS: tuple[str, ...] = (
+    "franka",
+    "franka_bimanual",
+    "franka_bimanual_robotenv",
+)
 DEFAULT_POLICY = "openpi"
 
 
@@ -44,6 +49,8 @@ def build_embodiment(name: str = "franka") -> Embodiment:
         return FrankaEmbodiment()
     if name == "franka_bimanual":
         return build_bimanual()
+    if name == "franka_bimanual_robotenv":
+        return BimanualRobotEnvEmbodiment()
     raise ValueError(f"embodiment must be one of {EMBODIMENTS}, got {name!r}")
 
 

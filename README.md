@@ -165,8 +165,10 @@ stall cannot leave an unsafe scene unattended.
 
 ## Two arms with LLM agent policies:
 
-The same package registers a second embodiment, `franka_bimanual`: a left and a
-right FR3 (or Panda) pair driven through two franky connections. It declares one
+The same package registers `franka_bimanual` for direct franky connections and
+`franka_bimanual_robotenv` for the two RobotEnv gRPC services shipped by
+configinc/franka-controller. Both represent a left and a right FR3 (or Panda)
+pair and declare one
 16-D absolute `joint_pos` contract, the single-arm packing repeated with the left
 half first (`left_joint1` ... `left_gripper`, `right_joint1` ... `right_gripper`),
 three cameras (`exterior_cam`, `left_wrist_cam`, `right_wrist_cam`), and the same
@@ -192,6 +194,19 @@ direct wired link per robot, so the workstation needs two network interfaces on
 two subnets (for example `172.16.0.2` and `172.16.1.2`), FCI enabled on both
 robots, and the PREEMPT_RT kernel. Two 1 kHz control loops then share one host.
 Validate both arms with the libfranka examples before any learned motion.
+
+For a franka-controller workstation, install the gRPC extra instead and expose
+that checkout's generated protocol modules:
+
+```bash
+uv pip install "inspect-robots-franka[robotenv]" inspect-robots-agent
+export PYTHONPATH=/home/ubuntu/franka-controller:$PYTHONPATH
+```
+
+The controller UI remains on port 9000. Complete its six setup steps first.
+The Inspect Robots embodiment connects to the left and right RobotEnv services
+on ports 50061 and 50063. Ports 50051 and 50053 are the underlying Polymetis
+services and are not Inspect Robots endpoints.
 
 ### API keys:
 
@@ -241,6 +256,21 @@ right_wrist_cam_device = /dev/v4l/by-id/YOUR-RIGHT-WRIST-CAMERA
 docs_extra = The arms face each other across a 0.9 m table. The exterior camera looks in from the left arm's side.
 ```
 
+With franka-controller on the same workstation, select the RobotEnv embodiment
+and use gRPC endpoints instead of FCI addresses:
+
+```ini
+[defaults]
+embodiment = franka_bimanual_robotenv
+
+[embodiment.args]
+left_hostname = 127.0.0.1:50061
+right_hostname = 127.0.0.1:50063
+```
+
+RobotEnv uses a closed-positive gripper value while this package exposes an
+open-positive value. The adapter converts that polarity in both directions.
+
 `max_steps` sits far above the single-arm 450 because one agent tool call plays
 out as many interpolated steps, up to a 10 s cap per call: 450 steps at 15 Hz is
 about three tool calls. `docs_extra` is appended to the notes the model reads.
@@ -252,6 +282,11 @@ State where the arms stand relative to each other and to the exterior camera.
 inspect-robots-franka-preflight --embodiment franka_bimanual \
     --policy agent -P model=openai/gpt-6-astra
 inspect-robots doctor --embodiment franka_bimanual
+
+# franka-controller transport
+inspect-robots-franka-preflight --embodiment franka_bimanual_robotenv \
+    --policy agent -P model=openai/gpt-6-astra
+inspect-robots doctor --embodiment franka_bimanual_robotenv
 ```
 
 Preflight constructs the policy with the same `-P` arguments a run would use,
@@ -264,6 +299,11 @@ inspect-robots "hand the red block from the left arm to the right arm" \
     --policy agent --embodiment franka_bimanual -P model=openai/gpt-6-astra
 inspect-robots "stack both cubes on the plate" \
     --policy agent --embodiment franka_bimanual -P model=anthropic/claude-fable-5-1
+
+# after the port 9000 wizard reports both gRPC services healthy
+inspect-robots "hand the red block from the left arm to the right arm" \
+    --policy agent --embodiment franka_bimanual_robotenv \
+    -P model=openai/gpt-6-astra
 ```
 
 ### Two-arm behavior:
@@ -290,7 +330,7 @@ inspect-robots "stack both cubes on the plate" \
 
 | Field | Default | Meaning |
 |-------|---------|---------|
-| `left_hostname`, `right_hostname` | `None` | FCI addresses, both required at `reset()` |
+| `left_hostname`, `right_hostname` | `None` | FCI addresses, or `host:port` RobotEnv endpoints, both required at `reset()` |
 | `joint_low`, `joint_high`, `home_pose`, `rest_pose` | single-arm defaults, tiled | 16-D, left half first |
 | `exterior_cam_device`, `left_wrist_cam_device`, `right_wrist_cam_device` | `None` | Builtin OpenCV devices, all-or-none |
 | every other field | as `FrankaConfig` | Shared by both arms |

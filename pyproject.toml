@@ -27,6 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 franka = ["franky-control>=1.1"]
+robotenv = ["grpcio>=1.46", "protobuf>=3.20,<5"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
@@ -44,6 +45,7 @@ Collection = "https://github.com/robocurve/worldevals"
 [project.entry-points."inspect_robots.embodiments"]
 franka = "inspect_robots_franka.embodiment:FrankaEmbodiment"
 franka_bimanual = "inspect_robots_franka.embodiment_bimanual:BimanualFrankaEmbodiment"
+franka_bimanual_robotenv = "inspect_robots_franka.embodiment_robotenv:BimanualRobotEnvEmbodiment"
 
 [project.entry-points."inspect_robots.policies"]
 openpi = "inspect_robots_franka.policy:OpenpiPolicy"

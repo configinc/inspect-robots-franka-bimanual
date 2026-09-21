@@ -14,6 +14,8 @@ Inspect Robots swaps a policy and an embodiment. This package ships both:
 - `franka_bimanual` commands a left and a right arm through two franky drivers
   and reads three cameras. No policy in this package drives it; the LLM agent
   policy from `inspect-robots-agent` binds to its declared spaces.
+- `franka_bimanual_robotenv` reuses the same contract and safety behavior over
+  franka-controller's left and right RobotEnv gRPC services.
 
 The single-arm pair declares the same 8-D `joint_pos` contract: seven radians
 plus one normalized gripper slot, where 0 is closed and 1 is open. The bimanual

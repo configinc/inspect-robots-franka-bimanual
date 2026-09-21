@@ -12,6 +12,7 @@ from inspect_robots_franka.config import FrankaConfig, OpenpiConfig
 from inspect_robots_franka.config_bimanual import BimanualFrankaConfig
 from inspect_robots_franka.embodiment import FrankaEmbodiment
 from inspect_robots_franka.embodiment_bimanual import BimanualFrankaEmbodiment
+from inspect_robots_franka.embodiment_robotenv import BimanualRobotEnvEmbodiment
 from inspect_robots_franka.operator import OperatorIO
 from inspect_robots_franka.packing import DIM_LABELS, STATE_KEY, TOTAL_DIM
 from inspect_robots_franka.packing_bimanual import DIM_LABELS as BIMANUAL_DIM_LABELS
@@ -35,6 +36,7 @@ __all__ = [
     "TOTAL_DIM",
     "BimanualFrankaConfig",
     "BimanualFrankaEmbodiment",
+    "BimanualRobotEnvEmbodiment",
     "FrankaConfig",
     "FrankaEmbodiment",
     "OpenpiConfig",

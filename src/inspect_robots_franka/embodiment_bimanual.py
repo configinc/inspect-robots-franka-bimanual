@@ -174,7 +174,7 @@ class BimanualFrankaEmbodiment:
         if missing:
             names = " and ".join(f"{side}_hostname" for side in missing)
             raise ConfigError(
-                f"BimanualFrankaConfig.{names} required before reset; set both FCI addresses"
+                f"BimanualFrankaConfig.{names} required before reset; set both arm endpoints"
             )
         for side in ARMS:
             if side not in self._drivers:

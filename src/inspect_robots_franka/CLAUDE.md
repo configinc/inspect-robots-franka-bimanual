@@ -15,6 +15,7 @@ keeps their 8-D absolute joint-position contract symmetric, and the
 | `packing_bimanual.py` | 16-D constants, left-first labels, strict validation, and split/join helpers over `packing.py`. |
 | `config_bimanual.py` | Frozen two-arm config that slices into per-arm `FrankaConfig`, plus the 16-D space builders. |
 | `embodiment_bimanual.py` | Two per-arm drivers behind one embodiment: sequential homing, same-tick commands, per-arm gripper gating. |
+| `embodiment_robotenv.py` | Bimanual RobotEnv gRPC adapter with explicit gripper-polarity conversion. |
 | `_franky.py` | Guided loader for the optional firmware-specific franky wheel. |
 | `operator.py` | Injectable readiness and scoring prompts. |
 | `preflight.py` | Hardware-free compatibility CLI for either embodiment and any registered policy. |
