@@ -320,6 +320,19 @@ inspect-robots run --instruction "record the stationary bimanual rig" \
     --policy bimanual_hold --embodiment franka_bimanual_robotenv --max-steps 75
 ```
 
+Keep the log renderer running beside `inspect-robots view --serve` to create
+camera MP4s and replace each completed live page with a video-enabled static
+report automatically:
+
+```bash
+python scripts/watch_logs.py logs
+```
+
+For the agent policy, set `transcript_echo = true` under `[policy.args]` to
+also print each model note and tool call in the rollout terminal. The HTML log
+records the transcript regardless of that terminal-only setting; provider APIs
+do not expose private chain-of-thought.
+
 ### Two-arm behavior:
 
 - **One action, both arms.** `step()` clamps the 16-D command, sends the left

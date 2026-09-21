@@ -25,3 +25,16 @@ def test_bimanual_hold_echoes_observed_state_without_images_or_api() -> None:
     assert policy.num_inferences == 1
     assert np.array_equal(chunk.actions[0].data, state)
     assert chunk.actions[0].data is not state
+    assert policy.transcript_delta() == [
+        {"role": "user", "content": "record this rollout"},
+        {
+            "role": "assistant",
+            "content": "API-free hold: keeping the observed 16-D pose unchanged.",
+        },
+    ]
+    assert policy.transcript_delta() is None
+    assert policy.transcript()[-1]["role"] == "assistant"
+
+    policy.act(Observation(images={}, state={STATE_KEY: state}))
+    assert policy.num_inferences == 2
+    assert len(policy.transcript()) == 2

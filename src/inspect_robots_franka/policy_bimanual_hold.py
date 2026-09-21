@@ -21,13 +21,34 @@ class BimanualHoldPolicy:
         )
         self.config = PolicyConfig(action_horizon=1, replan_interval=1)
         self.num_inferences = 0
+        self._messages: list[dict[str, str]] = []
+        self._delta_cursor = 0
 
     def reset(self, scene: Scene) -> None:
         """Reset the diagnostic inference counter."""
         self.num_inferences = 0
+        self._messages = [{"role": "user", "content": scene.instruction or ""}]
+        self._delta_cursor = 0
 
     def act(self, observation: Observation) -> ActionChunk:
         """Return one action equal to the latest observed robot state."""
         self.num_inferences += 1
+        if self.num_inferences == 1:
+            self._messages.append(
+                {
+                    "role": "assistant",
+                    "content": "API-free hold: keeping the observed 16-D pose unchanged.",
+                }
+            )
         state = validate_dim(observation.state[STATE_KEY]).copy()
         return ActionChunk(actions=[Action(data=state)])
+
+    def transcript(self) -> list[dict[str, str]]:
+        """Return the small audit transcript used by the HTML video renderer."""
+        return [dict(message) for message in self._messages]
+
+    def transcript_delta(self) -> list[dict[str, str]] | None:
+        """Return new audit messages for the live HTML viewer."""
+        messages = [dict(message) for message in self._messages[self._delta_cursor :]]
+        self._delta_cursor = len(self._messages)
+        return messages or None
