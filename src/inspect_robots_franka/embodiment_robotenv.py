@@ -50,6 +50,23 @@ ROBOTENV_ACTION_SEMANTICS = ActionSemantics(
     frame="world",
     dim_labels=ROBOTENV_DIM_LABELS,
 )
+ROBOTENV_JOINT_DOCS = """This Y-frame rig uses the standard Franka 7-DoF serial
+kinematic chain. Craig DH rows (joint: a metres, d metres, alpha radians;
+theta=q_joint) are: J1 (0, 0.333, 0), J2 (0, 0, -pi/2), J3 (0, 0.316, pi/2),
+J4 (0.0825, 0, pi/2), J5 (-0.0825, 0.384, -pi/2), J6 (0, 0, pi/2),
+J7 (0.088, 0, pi/2), followed by a fixed flange (0, 0.107, 0).
+
+Desk reports fixed-axis xyz mounting angles in radians as left
+(roll=-0.8896808, pitch=0.1671428, yaw=-0.2024491) and right
+(roll=0.8896808, pitch=0.1671428, yaw=0.2024491). Their base-to-shared-world
+rotation matrices are:
+left  [[0.9659258, 0, 0.2588191], [-0.1982669, 0.6427876, 0.7399421],
+       [-0.1663657, -0.7660444, 0.6208852]]
+right [[0.9659258, 0, 0.2588191], [0.1982669, 0.6427876, -0.7399421],
+       [-0.1663657, 0.7660444, 0.6208852]]
+Use each transpose for shared-world-to-base vectors. These matrices describe
+the fixed base mounting only; joint targets remain absolute radians in each
+arm's local kinematic chain."""
 
 
 def robotenv_action_box() -> Box:
@@ -261,7 +278,11 @@ class BimanualRobotEnvEmbodiment(BimanualFrankaEmbodiment):
         )
         self._control_mode = control_mode
         if control_mode == "joint_pos":
-            self.info = dataclasses.replace(self.info, name="franka_bimanual_robotenv")
+            self.info = dataclasses.replace(
+                self.info,
+                name="franka_bimanual_robotenv",
+                docs=(self.info.docs or "") + "\n\n" + ROBOTENV_JOINT_DOCS,
+            )
             return
         docs = (
             "Two Franka arms controlled by position-only Cartesian deltas in the shared "

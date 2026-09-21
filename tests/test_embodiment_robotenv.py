@@ -407,6 +407,9 @@ def test_registered_embodiment_can_use_joint_position_control() -> None:
 
     assert embodiment.info.action_space.shape == (16,)
     assert embodiment.info.action_space.semantics.control_mode == "joint_pos"
+    assert "J7 (0.088, 0, pi/2)" in embodiment.info.docs
+    assert "left  [[0.9659258, 0, 0.2588191]" in embodiment.info.docs
+    assert "right [[0.9659258, 0, 0.2588191]" in embodiment.info.docs
     assert left.joints == pytest.approx(target[:7])
     assert right.joints == pytest.approx(target[8:15])
     assert left.cartesian_commands == right.cartesian_commands == []
