@@ -272,7 +272,7 @@ RobotEnv uses a closed-positive gripper value while this package exposes an
 open-positive value. The adapter converts that polarity in both directions.
 This registered profile requires the live services to report `y_frame_v1` with
 Robotiq grippers and refuses to move otherwise. Its default `home_pose` and
-`rest_pose` are the deployed Y-frame reset joints from franka-controller v3.0.9,
+`rest_pose` are the deployed RCI Y-frame reset joints,
 with an open gripper appended to each arm. Override either pose explicitly only
 after validating a different Y-frame calibration.
 

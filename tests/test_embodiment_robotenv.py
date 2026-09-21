@@ -279,6 +279,27 @@ def test_factory_and_registered_embodiment_remain_inert(
     assert configured._cfg.rest_pose is None
 
 
+def test_y_frame_robotiq_home_pose_matches_rci() -> None:
+    assert Y_FRAME_ROBOTIQ_HOME_POSE == (
+        0.0122,
+        -0.0490,
+        0.0695,
+        -2.4348,
+        1.8865,
+        2.6217,
+        -0.7963,
+        1.0,
+        -0.1657,
+        -0.0753,
+        0.0752,
+        -2.4377,
+        -1.8362,
+        2.6705,
+        0.9437,
+        1.0,
+    )
+
+
 def test_runtime_requirements_name_grpc_proto_and_cameras(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
