@@ -45,4 +45,4 @@ def test_entry_points_resolve() -> None:
     assert resolve("embodiment", "franka_bimanual").info.action_space.dim == 16
     robotenv = resolve("embodiment", "franka_bimanual_robotenv")
     assert robotenv.info.name == "franka_bimanual_robotenv"
-    assert robotenv.info.action_space.dim == 16
+    assert robotenv.info.action_space.dim == 8

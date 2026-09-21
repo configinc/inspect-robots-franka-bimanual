@@ -1,17 +1,24 @@
 from __future__ import annotations
 
+import dataclasses
 from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
 import pytest
 from inspect_robots.conformance import missing_runtime_requirements
+from inspect_robots.scene import Scene
+from inspect_robots.types import Action
 
 from inspect_robots_franka.config import FrankaConfig
 from inspect_robots_franka.config_bimanual import BimanualFrankaConfig
 from inspect_robots_franka.embodiment_robotenv import (
     GRPC_INSTALL_COMMAND,
     PROTO_INSTALL_COMMAND,
+    ROBOTENV_ACTION_HIGH,
+    ROBOTENV_ACTION_LOW,
+    ROBOTENV_ACTION_SEMANTICS,
+    ROBOTENV_DIM_LABELS,
     Y_FRAME_ROBOTIQ_HOME_POSE,
     BimanualRobotEnvEmbodiment,
     _RobotEnvDriver,
@@ -51,7 +58,7 @@ def _response(
 
 class _Stub:
     def __init__(self) -> None:
-        self.supported = ["joint_position"]
+        self.supported = ["cartesian_delta", "joint_position"]
         self.frame_type = "y_frame_v1"
         self.gripper_type = "robotiq"
         self.health = "HEALTHY"
@@ -167,6 +174,25 @@ def test_driver_maps_joint_commands_and_inverts_gripper_polarity() -> None:
     assert grpc.channel is not None and grpc.channel.closed
 
 
+def test_driver_maps_position_only_cartesian_deltas_and_accumulates_gripper() -> None:
+    driver, stub, _ = _driver()
+    driver.move_cartesian_delta(np.asarray([0.01, -0.02, 0.005]), -0.2)
+    request, timeout = stub.step_requests[-1]
+    assert request.action == pytest.approx([0.01, -0.02, 0.005, 0.0, 0.0, 0.0, 0.2])
+    assert request.action_space == "cartesian_delta"
+    assert request.gripper_action_space == "position"
+    assert timeout == 5.0
+
+    driver.move_cartesian_delta(np.zeros(3), 0.1)
+    assert stub.step_requests[-1][0].action[-1] == pytest.approx(0.1)
+    driver._gripper_open = 0.4
+    driver._gripper_open_command = None
+    driver.move_cartesian_delta(np.zeros(3), 0.1)
+    assert stub.step_requests[-1][0].action[-1] == pytest.approx(0.5)
+    with pytest.raises(ValueError, match="expected a 3-D Cartesian delta"):
+        driver.move_cartesian_delta(np.zeros(2), 0.0)
+
+
 def test_driver_refreshes_state_and_accepts_single_value_arrays() -> None:
     stub = _Stub()
     stub.reset_response = _response(observation=_observation(gripper=_Value(array=[0.25])))
@@ -209,9 +235,12 @@ def test_driver_surfaces_robotenv_status_failures(operation: str) -> None:
 def test_driver_rejects_incompatible_or_unhealthy_services() -> None:
     stub = _Stub()
     stub.supported = []
-    with pytest.raises(RuntimeError, match="does not support joint_position"):
+    with pytest.raises(RuntimeError, match="does not support cartesian_delta, joint_position"):
         _driver(stub)
     stub.supported = ["joint_position"]
+    with pytest.raises(RuntimeError, match="does not support cartesian_delta"):
+        _driver(stub)
+    stub.supported = ["cartesian_delta", "joint_position"]
     stub.frame_type = "plane_frame_v1"
     with pytest.raises(RuntimeError, match=r"plane_frame_v1 \+ robotiq"):
         _driver(stub)
@@ -266,10 +295,19 @@ def test_factory_and_registered_embodiment_remain_inert(
         driver_factory=factory,
         left_hostname="localhost:50061",
         right_hostname="localhost:50063",
+        docs_extra="Rig note.",
     )
     assert calls == []
     assert embodiment.info.name == "franka_bimanual_robotenv"
+    assert embodiment.info.action_space.shape == (8,)
+    assert embodiment.info.action_space.low == pytest.approx(ROBOTENV_ACTION_LOW)
+    assert embodiment.info.action_space.high == pytest.approx(ROBOTENV_ACTION_HIGH)
+    assert embodiment.info.action_space.semantics is ROBOTENV_ACTION_SEMANTICS
+    assert ROBOTENV_ACTION_SEMANTICS.control_mode == "eef_delta_pos"
+    assert ROBOTENV_ACTION_SEMANTICS.frame == "world"
+    assert ROBOTENV_ACTION_SEMANTICS.dim_labels == ROBOTENV_DIM_LABELS
     assert "y_frame_v1" in embodiment.info.docs
+    assert "Rig note." in embodiment.info.docs
     assert embodiment._cfg.home_pose == Y_FRAME_ROBOTIQ_HOME_POSE
     assert embodiment._cfg.rest_pose == Y_FRAME_ROBOTIQ_HOME_POSE
 
@@ -277,6 +315,71 @@ def test_factory_and_registered_embodiment_remain_inert(
     configured = BimanualRobotEnvEmbodiment(explicit, driver_factory=factory)
     assert configured._cfg is explicit
     assert configured._cfg.rest_pose is None
+
+
+class _CartesianFakeDriver:
+    def __init__(self) -> None:
+        self.joints = np.zeros(7)
+        self.width = 0.08
+        self.cartesian_commands: list[tuple[np.ndarray, float]] = []
+
+    def read_joints(self) -> np.ndarray:
+        return self.joints.copy()
+
+    def read_gripper_width(self) -> float:
+        return self.width
+
+    def move_joints(self, target: np.ndarray) -> None:
+        self.joints = np.asarray(target).copy()
+
+    def move_joints_sync(self, target: np.ndarray) -> None:
+        self.joints = np.asarray(target).copy()
+
+    def move_gripper(self, width: float) -> None:
+        self.width = width
+
+    def move_cartesian_delta(self, position_delta: np.ndarray, gripper_delta: float) -> None:
+        self.cartesian_commands.append((np.asarray(position_delta).copy(), gripper_delta))
+
+    def disconnect(self) -> None:
+        pass
+
+
+def test_registered_embodiment_clamps_and_sends_cartesian_deltas() -> None:
+    left = _CartesianFakeDriver()
+    right = _CartesianFakeDriver()
+    drivers = iter((left, right))
+    image = np.zeros((2, 3, 3), dtype=np.uint8)
+    embodiment = BimanualRobotEnvEmbodiment(
+        left_hostname="localhost:50061",
+        right_hostname="localhost:50063",
+        unattended=True,
+        driver_factory=lambda _cfg: next(drivers),
+        camera_reader=lambda: {
+            "exterior_cam": image,
+            "left_wrist_cam": image,
+            "right_wrist_cam": image,
+        },
+        sleep_fn=lambda _delay: None,
+        clock=lambda: 0.0,
+    )
+    embodiment.reset(Scene(id="s", instruction="test Cartesian motion"))
+    result = embodiment.step(Action(data=np.asarray([1.0, -1.0, 0.01, -1.0] * 2)))
+
+    for driver in (left, right):
+        xyz, gripper = driver.cartesian_commands[-1]
+        assert xyz == pytest.approx([0.02, -0.02, 0.01])
+        assert gripper == pytest.approx(-0.2)
+    assert result.terminated is False
+    with pytest.raises(ValueError, match="expected an 8-D vector"):
+        embodiment.step(Action(data=np.zeros(7)))
+
+    embodiment._cfg = dataclasses.replace(embodiment._cfg, unattended=False)
+    embodiment._poll_end = lambda: True
+    embodiment._operator = SimpleNamespace(confirm_success=lambda: True)
+    result = embodiment.step(Action(data=np.zeros(8)))
+    assert result.terminated is True
+    assert result.termination_reason == "success"
 
 
 def test_y_frame_robotiq_home_pose_matches_rci() -> None:

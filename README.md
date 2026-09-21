@@ -28,6 +28,8 @@ package provides both sides of a Franka and OpenPI stack, plus a two-arm body:
   Franka Hand, and exterior and wrist cameras.
 - **`franka_bimanual` embodiment:** two of those drivers for a left and right
   pair, three cameras, and one 16-D contract, built for LLM agent policies.
+- **`franka_bimanual_robotenv` embodiment:** the same rig through
+  franka-controller, exposed as bounded position-only Cartesian deltas.
   See [Two arms with LLM agent policies](#two-arms-with-llm-agent-policies).
 
 The single-arm pair declares the same 8-D absolute `joint_pos` contract: seven
@@ -168,18 +170,20 @@ stall cannot leave an unsafe scene unattended.
 The same package registers `franka_bimanual` for direct franky connections and
 `franka_bimanual_robotenv` for the two RobotEnv gRPC services shipped by
 configinc/franka-controller. Both represent a left and a right FR3 (or Panda)
-pair and declare one
-16-D absolute `joint_pos` contract, the single-arm packing repeated with the left
-half first (`left_joint1` ... `left_gripper`, `right_joint1` ... `right_gripper`),
-three cameras (`exterior_cam`, `left_wrist_cam`, `right_wrist_cam`), and the same
-hard clamp, gripper gating, pacing, and operator flow as `franka`.
+pair with three cameras (`exterior_cam`, `left_wrist_cam`, `right_wrist_cam`).
+The direct embodiment keeps the 16-D absolute `joint_pos` contract. The
+RobotEnv embodiment declares an 8-D `eef_delta_pos` contract: world-frame
+`dx`, `dy`, `dz`, and open-positive gripper delta for each arm. Each control
+step is limited to 2 cm of translation and 0.2 normalized gripper travel;
+end-effector rotation stays fixed. Homing and parking still use the validated
+RCI joint reset poses.
 
 No shipped VLA drives it. The released `pi05_droid` checkpoint is single-arm, so
 `--policy openpi` against `franka_bimanual` fails compatibility on purpose. The
 intended brain is the
 [inspect-robots-agent](https://github.com/robocurve/inspect-robots/tree/main/plugins/inspect-robots-agent)
 plugin: a frontier LLM builds its whole tool surface from the embodiment's
-declared spaces at bind time, so the 16-D contract, the per-dimension labels,
+declared spaces at bind time, so the control contract, per-dimension labels,
 and the operating notes in `EmbodimentInfo.docs` are exactly what the model
 sees. Swapping models changes only `-P model=`; the robot half never changes.
 
@@ -312,8 +316,9 @@ inspect-robots "hand the red block from the left arm to the right arm" \
 ```
 
 To test homing, cameras, logs, and video export without an API key, run the
-API-free hold policy. It echoes the observed 16-D state and does not interpret
-the instruction:
+API-free hold policy. It emits zero Cartesian deltas for RobotEnv (or echoes the
+observed 16-D joint state for the direct embodiment) and does not interpret the
+instruction:
 
 ```bash
 inspect-robots run --instruction "record the stationary bimanual rig" \
@@ -335,15 +340,15 @@ do not expose private chain-of-thought.
 
 ### Two-arm behavior:
 
-- **One action, both arms.** `step()` clamps the 16-D command, sends the left
-  half to the left arm and the right half to the right arm as asynchronous
-  franky targets in the same tick, then paces. Nothing synchronizes the two
-  trajectories beyond that shared tick.
+- **One action, both arms.** The direct embodiment clamps a 16-D joint target.
+  RobotEnv clamps an 8-D Cartesian-delta command and sends each arm's XYZ delta
+  through RCI's existing IK path while holding orientation fixed.
 - **Homing and parking are sequential.** `reset()` homes the left arm, then the
   right, each blocking until it arrives, after one stand-clear prompt covering
   both. `close()` parks in the same order and disconnects every connected arm
   even when a park or another disconnect fails.
-- **No inter-arm collision check.** The hard clamp is a per-joint box. Keep the
+- **No inter-arm collision check.** Bounds limit each command, not the accumulated
+  workspace. Keep the
   workspaces separated, or add a collision check, before unattended runs. The
   embodiment docs tell the model to keep the hands apart and to move one arm at
   a time when they are close.

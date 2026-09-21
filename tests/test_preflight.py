@@ -59,7 +59,7 @@ def test_build_embodiment_by_name_rejects_unknown_names() -> None:
     assert preflight.build_embodiment("franka_bimanual").info.action_space.dim == 16
     robotenv = preflight.build_embodiment("franka_bimanual_robotenv")
     assert robotenv.info.name == "franka_bimanual_robotenv"
-    assert robotenv.info.action_space.dim == 16
+    assert robotenv.info.action_space.dim == 8
     with pytest.raises(ValueError, match="embodiment must be one of"):
         preflight.build_embodiment("yam_arms")
 

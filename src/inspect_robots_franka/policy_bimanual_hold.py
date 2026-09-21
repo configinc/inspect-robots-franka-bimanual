@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import numpy as np
+from inspect_robots.embodiment import EmbodimentInfo
 from inspect_robots.policy import PolicyConfig, PolicyInfo
 from inspect_robots.scene import Scene
 from inspect_robots.types import Action, ActionChunk, Observation
@@ -23,6 +25,20 @@ class BimanualHoldPolicy:
         self.num_inferences = 0
         self._messages: list[dict[str, str]] = []
         self._delta_cursor = 0
+        self._displacement = False
+
+    def bind(self, embodiment_info: EmbodimentInfo) -> None:
+        """Adopt the embodiment contract so zero deltas hold Cartesian rigs still."""
+        self.info = PolicyInfo(
+            name="bimanual_hold",
+            action_space=embodiment_info.action_space,
+            observation_space=embodiment_info.observation_space,
+        )
+        semantics = embodiment_info.action_space.semantics
+        mode = semantics.control_mode if semantics is not None else None
+        if mode not in {"joint_pos", "eef_delta_pos"}:
+            raise ValueError(f"bimanual_hold cannot safely hold control mode {mode!r}")
+        self._displacement = mode == "eef_delta_pos"
 
     def reset(self, scene: Scene) -> None:
         """Reset the diagnostic inference counter."""
@@ -34,14 +50,23 @@ class BimanualHoldPolicy:
         """Return one action equal to the latest observed robot state."""
         self.num_inferences += 1
         if self.num_inferences == 1:
+            detail = (
+                f"sending zero {self.info.action_space.dim}-D Cartesian deltas"
+                if self._displacement
+                else "keeping the observed 16-D pose unchanged"
+            )
             self._messages.append(
                 {
                     "role": "assistant",
-                    "content": "API-free hold: keeping the observed 16-D pose unchanged.",
+                    "content": f"API-free hold: {detail}.",
                 }
             )
-        state = validate_dim(observation.state[STATE_KEY]).copy()
-        return ActionChunk(actions=[Action(data=state)])
+        data = (
+            np.zeros(self.info.action_space.dim, dtype=np.float64)
+            if self._displacement
+            else validate_dim(observation.state[STATE_KEY]).copy()
+        )
+        return ActionChunk(actions=[Action(data=data)])
 
     def transcript(self) -> list[dict[str, str]]:
         """Return the small audit transcript used by the HTML video renderer."""
