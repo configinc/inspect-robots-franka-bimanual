@@ -16,6 +16,24 @@ from inspect_robots_franka.embodiment_bimanual import BimanualFrankaEmbodiment
 
 GRPC_INSTALL_COMMAND = 'pip install "inspect-robots-franka[robotenv]"'
 PROTO_INSTALL_COMMAND = "export PYTHONPATH=/home/ubuntu/franka-controller:$PYTHONPATH"
+Y_FRAME_ROBOTIQ_HOME_POSE: tuple[float, ...] = (
+    0.4755530,
+    0.2318635,
+    -0.5844381,
+    -2.2414968,
+    0.8894346,
+    2.9037103,
+    0.4044128,
+    1.0,
+    -0.1042003,
+    0.0628366,
+    0.2630598,
+    -2.3995060,
+    0.1996380,
+    2.9613211,
+    -1.2133284,
+    1.0,
+)
 
 
 def _load_robotenv() -> tuple[Any, Any, Any]:  # pragma: no cover - live optional imports
@@ -58,6 +76,11 @@ class _RobotEnvDriver:
         robot_cfg = self._stub.GetConfig(self._pb2.GetConfigRequest(), timeout=5.0)
         if "joint_position" not in robot_cfg.supported_action_spaces:
             raise RuntimeError(f"RobotEnv at {cfg.hostname} does not support joint_position")
+        if (robot_cfg.frame_type, robot_cfg.gripper_type) != ("y_frame_v1", "robotiq"):
+            raise RuntimeError(
+                f"RobotEnv at {cfg.hostname} is {robot_cfg.frame_type} + "
+                f"{robot_cfg.gripper_type}; expected y_frame_v1 + robotiq"
+            )
         health = self._stub.HealthCheck(self._pb2.HealthCheckRequest(), timeout=5.0)
         if health.status != "HEALTHY":
             raise RuntimeError(f"RobotEnv at {cfg.hostname} is {health.status}: {health.message}")
@@ -148,7 +171,7 @@ def robotenv_driver_factory(cfg: FrankaConfig) -> Driver:
 
 
 class BimanualRobotEnvEmbodiment(BimanualFrankaEmbodiment):
-    """Two-arm embodiment using franka-controller instead of direct FCI."""
+    """Y-frame Robotiq pair using franka-controller instead of direct FCI."""
 
     RUNTIME_REQUIREMENTS: ClassVar[dict[str, str]] = {
         "grpc": GRPC_INSTALL_COMMAND,
@@ -163,6 +186,9 @@ class BimanualRobotEnvEmbodiment(BimanualFrankaEmbodiment):
         driver_factory: DriverFactory | None = None,
         **kwargs: Any,
     ) -> None:
+        if config is None:
+            kwargs.setdefault("home_pose", Y_FRAME_ROBOTIQ_HOME_POSE)
+            kwargs.setdefault("rest_pose", kwargs["home_pose"])
         super().__init__(
             config,
             driver_factory=driver_factory or robotenv_driver_factory,
@@ -172,6 +198,7 @@ class BimanualRobotEnvEmbodiment(BimanualFrankaEmbodiment):
             self.info,
             name="franka_bimanual_robotenv",
             docs=(self.info.docs or "")
-            + "\n\nRobot transport uses franka-controller RobotEnv gRPC. Endpoint commands "
-            "are converted to its closed-positive gripper convention.",
+            + "\n\nThis profile requires a y_frame_v1 pair with Robotiq grippers. Robot "
+            "transport uses franka-controller RobotEnv gRPC, and endpoint commands are "
+            "converted to its closed-positive gripper convention.",
         )

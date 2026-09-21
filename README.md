@@ -264,12 +264,17 @@ and use gRPC endpoints instead of FCI addresses:
 embodiment = franka_bimanual_robotenv
 
 [embodiment.args]
-left_hostname = 127.0.0.1:50061
-right_hostname = 127.0.0.1:50063
+left_hostname = localhost:50061
+right_hostname = localhost:50063
 ```
 
 RobotEnv uses a closed-positive gripper value while this package exposes an
 open-positive value. The adapter converts that polarity in both directions.
+This registered profile requires the live services to report `y_frame_v1` with
+Robotiq grippers and refuses to move otherwise. Its default `home_pose` and
+`rest_pose` are the deployed Y-frame reset joints from franka-controller v3.0.9,
+with an open gripper appended to each arm. Override either pose explicitly only
+after validating a different Y-frame calibration.
 
 `max_steps` sits far above the single-arm 450 because one agent tool call plays
 out as many interpolated steps, up to a 10 s cap per call: 450 steps at 15 Hz is

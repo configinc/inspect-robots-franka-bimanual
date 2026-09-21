@@ -12,6 +12,7 @@ from inspect_robots_franka.config_bimanual import BimanualFrankaConfig
 from inspect_robots_franka.embodiment_robotenv import (
     GRPC_INSTALL_COMMAND,
     PROTO_INSTALL_COMMAND,
+    Y_FRAME_ROBOTIQ_HOME_POSE,
     BimanualRobotEnvEmbodiment,
     _RobotEnvDriver,
     robotenv_driver_factory,
@@ -51,6 +52,8 @@ def _response(
 class _Stub:
     def __init__(self) -> None:
         self.supported = ["joint_position"]
+        self.frame_type = "y_frame_v1"
+        self.gripper_type = "robotiq"
         self.health = "HEALTHY"
         self.health_message = "ready"
         self.reset_response = _response()
@@ -60,7 +63,11 @@ class _Stub:
 
     def GetConfig(self, _request: Any, *, timeout: float) -> SimpleNamespace:
         assert timeout == 5.0
-        return SimpleNamespace(supported_action_spaces=self.supported)
+        return SimpleNamespace(
+            supported_action_spaces=self.supported,
+            frame_type=self.frame_type,
+            gripper_type=self.gripper_type,
+        )
 
     def HealthCheck(self, _request: Any, *, timeout: float) -> SimpleNamespace:
         assert timeout == 5.0
@@ -131,7 +138,7 @@ def _driver(stub: _Stub | None = None) -> tuple[_RobotEnvDriver, _Stub, _Grpc]:
     actual_stub = stub or _Stub()
     grpc = _Grpc(actual_stub)
     driver = _RobotEnvDriver(
-        FrankaConfig(hostname="127.0.0.1:50061"), modules=(grpc, _Pb2, _Pb2Grpc)
+        FrankaConfig(hostname="localhost:50061"), modules=(grpc, _Pb2, _Pb2Grpc)
     )
     return driver, actual_stub, grpc
 
@@ -205,6 +212,14 @@ def test_driver_rejects_incompatible_or_unhealthy_services() -> None:
     with pytest.raises(RuntimeError, match="does not support joint_position"):
         _driver(stub)
     stub.supported = ["joint_position"]
+    stub.frame_type = "plane_frame_v1"
+    with pytest.raises(RuntimeError, match=r"plane_frame_v1 \+ robotiq"):
+        _driver(stub)
+    stub.frame_type = "y_frame_v1"
+    stub.gripper_type = "franka_hand"
+    with pytest.raises(RuntimeError, match=r"y_frame_v1 \+ franka_hand"):
+        _driver(stub)
+    stub.gripper_type = "robotiq"
     stub.health = "DEGRADED"
     with pytest.raises(RuntimeError, match="is DEGRADED: ready"):
         _driver(stub)
@@ -237,7 +252,7 @@ def test_factory_and_registered_embodiment_remain_inert(
         lambda: (grpc, _Pb2, _Pb2Grpc),
     )
     assert isinstance(
-        robotenv_driver_factory(FrankaConfig(hostname="127.0.0.1:50061")),
+        robotenv_driver_factory(FrankaConfig(hostname="localhost:50061")),
         _RobotEnvDriver,
     )
 
@@ -248,12 +263,20 @@ def test_factory_and_registered_embodiment_remain_inert(
         return SimpleNamespace()
 
     embodiment = BimanualRobotEnvEmbodiment(
-        BimanualFrankaConfig(left_hostname="127.0.0.1:50061", right_hostname="127.0.0.1:50063"),
         driver_factory=factory,
+        left_hostname="localhost:50061",
+        right_hostname="localhost:50063",
     )
     assert calls == []
     assert embodiment.info.name == "franka_bimanual_robotenv"
-    assert "closed-positive" in embodiment.info.docs
+    assert "y_frame_v1" in embodiment.info.docs
+    assert embodiment._cfg.home_pose == Y_FRAME_ROBOTIQ_HOME_POSE
+    assert embodiment._cfg.rest_pose == Y_FRAME_ROBOTIQ_HOME_POSE
+
+    explicit = BimanualFrankaConfig(rest_pose=None)
+    configured = BimanualRobotEnvEmbodiment(explicit, driver_factory=factory)
+    assert configured._cfg is explicit
+    assert configured._cfg.rest_pose is None
 
 
 def test_runtime_requirements_name_grpc_proto_and_cameras(

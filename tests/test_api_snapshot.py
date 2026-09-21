@@ -17,6 +17,7 @@ EXPECTED_API = {
     "OperatorIO",
     "STATE_KEY",
     "TOTAL_DIM",
+    "Y_FRAME_ROBOTIQ_HOME_POSE",
     "DIM_LABELS",
     "build",
     "run_preflight",
