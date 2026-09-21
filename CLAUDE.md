@@ -1,7 +1,8 @@
 # inspect-robots-franka: agent guide
 
-Inspect Robots adapters for real Franka FR3 and Panda arms driven by Physical
-Intelligence OpenPI DROID policy servers. The framework lives in
+Inspect Robots adapters for real Franka FR3 and Panda arms: one arm driven by
+Physical Intelligence OpenPI DROID policy servers, or a left and right pair
+driven by LLM agent policies. The framework lives in
 [inspect-robots](https://github.com/robocurve/inspect-robots).
 
 ## The one big idea
@@ -10,15 +11,23 @@ Inspect Robots swaps a policy and an embodiment. This package ships both:
 
 - `openpi` converts pi05-DROID velocity chunks into absolute joint targets.
 - `franka` commands the arm through franky and reads two cameras.
+- `franka_bimanual` commands a left and a right arm through two franky drivers
+  and reads three cameras. No policy in this package drives it; the LLM agent
+  policy from `inspect-robots-agent` binds to its declared spaces.
 
-Both declare the same 8-D `joint_pos` contract: seven radians plus one normalized
-gripper slot, where 0 is closed and 1 is open.
+The single-arm pair declares the same 8-D `joint_pos` contract: seven radians
+plus one normalized gripper slot, where 0 is closed and 1 is open. The bimanual
+embodiment declares that contract twice, left half first, as 16-D. The
+`*_bimanual` modules add to the single-arm modules and never change their
+contract; `BimanualFrankaConfig.arm_config(side)` slices one side into a
+`FrankaConfig` so the single-arm driver factory and validation serve both arms.
 
 ## Layout
 
 - `src/inspect_robots_franka/`: package modules and local module map.
 - `tests/`: fully injected hardware-free tests.
 - `plans/0001-franka-openpi-design.md`: accepted binding design.
+- `plans/0002-bimanual-agent-design.md`: accepted two-arm design.
 
 ## Working here
 
@@ -32,8 +41,11 @@ gripper slot, where 0 is closed and 1 is open.
 
 ## Safety invariants
 
-- `FrankaEmbodiment.step()` always clamps to configured limits without relying
-  on an approver.
+- `FrankaEmbodiment.step()` and `BimanualFrankaEmbodiment.step()` always clamp
+  to configured limits without relying on an approver.
+- The bimanual embodiment homes and parks one arm at a time, blocking on each,
+  and disconnects every connected arm at `close()` even when a park or another
+  disconnect fails. It performs no inter-arm collision check.
 - The policy integrates DROID velocities before emitting actions. The public
   control mode remains absolute `joint_pos`.
 - DROID polarity conversion stays in the policy. The embodiment only sees

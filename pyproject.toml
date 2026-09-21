@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "inspect-robots-franka"
 dynamic = ["version", "readme"]
-description = "Inspect Robots adapters for Franka FR3 and Panda arms driven by openpi DROID policies."
+description = "Inspect Robots adapters for single and bimanual Franka FR3 and Panda arms, driven by openpi DROID or LLM agent policies."
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "RoboCurve" }]
-keywords = ["robotics", "vla", "franka", "openpi", "droid", "inspect-robots"]
+keywords = ["robotics", "vla", "franka", "bimanual", "openpi", "droid", "llm-agent", "inspect-robots"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -43,6 +43,7 @@ Collection = "https://github.com/robocurve/worldevals"
 
 [project.entry-points."inspect_robots.embodiments"]
 franka = "inspect_robots_franka.embodiment:FrankaEmbodiment"
+franka_bimanual = "inspect_robots_franka.embodiment_bimanual:BimanualFrankaEmbodiment"
 
 [project.entry-points."inspect_robots.policies"]
 openpi = "inspect_robots_franka.policy:OpenpiPolicy"

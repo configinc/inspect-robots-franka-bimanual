@@ -5,6 +5,10 @@ import re
 import inspect_robots_franka
 
 EXPECTED_API = {
+    "BimanualFrankaConfig",
+    "BimanualFrankaEmbodiment",
+    "BIMANUAL_DIM_LABELS",
+    "BIMANUAL_TOTAL_DIM",
     "FrankaConfig",
     "OpenpiConfig",
     "FrankaEmbodiment",
@@ -34,3 +38,5 @@ def test_entry_points_resolve() -> None:
 
     assert resolve("policy", "openpi").info.name == "openpi"
     assert resolve("embodiment", "franka").info.name == "franka"
+    assert resolve("embodiment", "franka_bimanual").info.name == "franka_bimanual"
+    assert resolve("embodiment", "franka_bimanual").info.action_space.dim == 16
