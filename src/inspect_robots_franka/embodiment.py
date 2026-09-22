@@ -117,10 +117,20 @@ def _default_driver_factory(cfg: FrankaConfig) -> Driver:  # pragma: no cover - 
 
 def _opencv_camera_reader(cfg: FrankaConfig) -> CameraReader:
     """Build a lazy OpenCV reader for the two configured V4L2 devices."""
-    devices = {
-        "exterior_cam": cfg.exterior_cam_device,
-        "wrist_cam": cfg.wrist_cam_device,
-    }
+    return opencv_camera_reader(
+        {"exterior_cam": cfg.exterior_cam_device, "wrist_cam": cfg.wrist_cam_device},
+        width=cfg.cam_width,
+        height=cfg.cam_height,
+    )
+
+
+def opencv_camera_reader(
+    devices: Mapping[str, str | int | None], *, width: int, height: int
+) -> CameraReader:
+    """Build a lazy OpenCV reader for named V4L2 devices at one shared resolution.
+
+    Nothing is opened until the first read, so construction stays hardware-free.
+    """
     captures: dict[str, Any] = {}
 
     def reader() -> ImageMap:  # pragma: no cover - real cameras
@@ -131,8 +141,8 @@ def _opencv_camera_reader(cfg: FrankaConfig) -> CameraReader:
                 cap = cv2.VideoCapture(cast(Any, device))
                 if not cap.isOpened():
                     raise RuntimeError(f"cannot open {name} at {device}")
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.cam_width)
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.cam_height)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
                 captures[name] = cap
         frames: dict[str, npt.NDArray[np.uint8]] = {}
         for name, cap in captures.items():
@@ -140,7 +150,7 @@ def _opencv_camera_reader(cfg: FrankaConfig) -> CameraReader:
             if not ok or frame is None:
                 raise RuntimeError(f"frame read failed for {name} ({devices[name]})")
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            rgb = cv2.resize(rgb, (cfg.cam_width, cfg.cam_height))
+            rgb = cv2.resize(rgb, (width, height))
             frames[name] = np.asarray(rgb, dtype=np.uint8)
         return frames
 

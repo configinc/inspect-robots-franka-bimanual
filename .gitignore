@@ -18,6 +18,8 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 .uv-cache/
+# Written by the eval loop during the end-to-end tests
+logs/
 
 # Secrets / env
 .env

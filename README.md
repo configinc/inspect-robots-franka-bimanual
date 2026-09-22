@@ -3,8 +3,9 @@
 # inspect-robots-franka
 
 Run [Inspect Robots](https://github.com/robocurve/inspect-robots) evals on real
-[Franka FR3](https://franka.de/) and Panda arms with
-[OpenPI](https://github.com/Physical-Intelligence/openpi) DROID policies.
+[Franka FR3](https://franka.de/) and Panda arms, one arm with
+[OpenPI](https://github.com/Physical-Intelligence/openpi) DROID policies or a
+left and right pair with LLM agent policies.
 
 ![Status: alpha](https://img.shields.io/badge/status-alpha-blue)
 [![CI](https://github.com/robocurve/inspect-robots-franka/actions/workflows/ci.yml/badge.svg)](https://github.com/robocurve/inspect-robots-franka/actions/workflows/ci.yml)
@@ -19,17 +20,22 @@ Run [Inspect Robots](https://github.com/robocurve/inspect-robots) evals on real
 > This project is in early development. Pin a version before depending on its API.
 
 Inspect Robots has two swappable inputs: a `Policy` and an `Embodiment`. This
-package provides both sides of a Franka and OpenPI stack:
+package provides both sides of a Franka and OpenPI stack, plus a two-arm body:
 
 - **`openpi` policy:** a websocket client for Physical Intelligence OpenPI
   servers, with pi05-DROID velocity integration and gripper conversion.
 - **`franka` embodiment:** a lazy franky driver for one FR3 or Panda arm, its
   Franka Hand, and exterior and wrist cameras.
+- **`franka_bimanual` embodiment:** two of those drivers for a left and right
+  pair, three cameras, and one 16-D contract, built for LLM agent policies.
+- **`franka_bimanual_robotenv` embodiment:** the same rig through
+  franka-controller, exposed as bounded position-only Cartesian deltas.
+  See [Two arms with LLM agent policies](#two-arms-with-llm-agent-policies).
 
-Both sides declare the same 8-D absolute `joint_pos` contract: seven arm joints
-in radians followed by a normalized gripper, where 0 is closed and 1 is open.
-The compatibility check passes with zero errors and zero warnings. For other
-robot adapters, see
+The single-arm pair declares the same 8-D absolute `joint_pos` contract: seven
+arm joints in radians followed by a normalized gripper, where 0 is closed and 1
+is open. The compatibility check passes with zero errors and zero warnings. For
+other robot adapters, see
 [inspect-robots-yam](https://github.com/robocurve/inspect-robots-yam) and
 [inspect-robots-so101](https://github.com/robocurve/inspect-robots-so101).
 
@@ -96,6 +102,13 @@ A green report verifies action dimension, control mode, rotation representation,
 gripper kind, frame, cameras, state keys, and optional scene realizability. It
 cannot infer whether a checkpoint emits velocity or position actions.
 
+`--embodiment franka_bimanual` checks the two-arm body instead, and `--policy
+NAME` checks any registered policy: the name resolves through the Inspect Robots
+registry with any `-P key=value` arguments forwarded to its constructor and,
+when the policy exposes `bind`, is bound to the embodiment's declared spaces
+first. Constructing `agent` needs `-P model=provider/model` and that model's API
+key in the environment.
+
 ## Run on hardware:
 
 The setup wizard interviews the two declared V4L2 camera slots:
@@ -151,6 +164,213 @@ component ends them.
 The upstream websocket client has no inference timeout. A broken or unreachable
 server can block `infer()`. Run the server and robot supervisor so a network
 stall cannot leave an unsafe scene unattended.
+
+## Two arms with LLM agent policies:
+
+The same package registers `franka_bimanual` for direct franky connections and
+`franka_bimanual_robotenv` for the two RobotEnv gRPC services shipped by
+configinc/franka-controller. Both represent a left and a right FR3 (or Panda)
+pair with three cameras (`exterior_cam`, `left_wrist_cam`, `right_wrist_cam`).
+The direct embodiment keeps the 16-D absolute `joint_pos` contract. The
+RobotEnv embodiment declares an 8-D `eef_delta_pos` contract: world-frame
+`dx`, `dy`, `dz`, and open-positive gripper delta for each arm. Each control
+step is limited to 5 cm of translation and 0.2 normalized gripper travel;
+end-effector rotation stays fixed. Homing and parking still use the validated
+RCI joint reset poses.
+
+No shipped VLA drives it. The released `pi05_droid` checkpoint is single-arm, so
+`--policy openpi` against `franka_bimanual` fails compatibility on purpose. The
+intended brain is the
+[inspect-robots-agent](https://github.com/robocurve/inspect-robots/tree/main/plugins/inspect-robots-agent)
+plugin: a frontier LLM builds its whole tool surface from the embodiment's
+declared spaces at bind time, so the control contract, per-dimension labels,
+and the operating notes in `EmbodimentInfo.docs` are exactly what the model
+sees. Swapping models changes only `-P model=`; the robot half never changes.
+
+### Install:
+
+```bash
+uv pip install "inspect-robots-franka[franka]" inspect-robots-agent
+```
+
+Each arm needs its own FCI connection. libfranka real-time control expects a
+direct wired link per robot, so the workstation needs two network interfaces on
+two subnets (for example `172.16.0.2` and `172.16.1.2`), FCI enabled on both
+robots, and the PREEMPT_RT kernel. Two 1 kHz control loops then share one host.
+Validate both arms with the libfranka examples before any learned motion.
+
+For a franka-controller workstation, install the gRPC extra instead and expose
+that checkout's generated protocol modules:
+
+```bash
+uv pip install "inspect-robots-franka[robotenv]" inspect-robots-agent
+export PYTHONPATH=/home/ubuntu/franka-controller:$PYTHONPATH
+```
+
+The controller UI remains on port 9000. Complete its six setup steps first.
+The Inspect Robots embodiment connects to the left and right RobotEnv services
+on ports 50061 and 50063. Ports 50051 and 50053 are the underlying Polymetis
+services and are not Inspect Robots endpoints.
+
+### API keys:
+
+The agent policy reads provider keys from the environment. Put them in a `.env`
+in the working directory (the CLI loads it) and pick the model with
+`-P model=provider/model`:
+
+| Prefix | Key |
+|---|---|
+| `openai/*` | `OPENAI_API_KEY` |
+| `anthropic/*` | `ANTHROPIC_API_KEY` |
+| `google/*` | `GEMINI_API_KEY` |
+| any model | `OPENROUTER_API_KEY` |
+
+See the agent plugin README for the full provider table and the `-P wire=`
+options. This package never reads these keys itself.
+
+### Configure:
+
+```bash
+inspect-robots setup
+```
+
+The wizard interviews the three declared V4L2 camera slots as one all-or-none
+group. Add the two hostnames and the policy defaults by hand in
+`~/.config/inspect-robots/config.ini`:
+
+```ini
+[defaults]
+policy = agent
+embodiment = franka_bimanual
+scorer = success_at_end
+max_steps = 3000
+store_frames = true
+
+[policy.args]
+model = openai/gpt-6-astra
+effort = low
+images = on_demand
+
+[embodiment.args]
+left_hostname = 172.16.0.2
+right_hostname = 172.16.1.2
+exterior_cam_device = /dev/v4l/by-id/YOUR-EXTERIOR-CAMERA
+left_wrist_cam_device = /dev/v4l/by-id/YOUR-LEFT-WRIST-CAMERA
+right_wrist_cam_device = /dev/v4l/by-id/YOUR-RIGHT-WRIST-CAMERA
+docs_extra = The arms face each other across a 0.9 m table. The exterior camera looks in from the left arm's side.
+```
+
+With franka-controller on the same workstation, select the RobotEnv embodiment
+and use gRPC endpoints instead of FCI addresses:
+
+```ini
+[defaults]
+embodiment = franka_bimanual_robotenv
+
+[embodiment.args]
+left_hostname = localhost:50061
+right_hostname = localhost:50063
+```
+
+RobotEnv uses a closed-positive gripper value while this package exposes an
+open-positive value. The adapter converts that polarity in both directions.
+This registered profile requires the live services to report `y_frame_v1` with
+Robotiq grippers and refuses to move otherwise. Its default `home_pose` and
+`rest_pose` are the deployed RCI Y-frame reset joints,
+with an open gripper appended to each arm. Override either pose explicitly only
+after validating a different Y-frame calibration.
+
+`max_steps` sits far above the single-arm 450 because one agent tool call plays
+out as many interpolated steps, up to a 10 s cap per call: 450 steps at 15 Hz is
+about three tool calls. `docs_extra` is appended to the notes the model reads.
+State where the arms stand relative to each other and to the exterior camera.
+
+### Check without hardware, then run:
+
+```bash
+inspect-robots-franka-preflight --embodiment franka_bimanual \
+    --policy agent -P model=openai/gpt-6-astra
+inspect-robots doctor --embodiment franka_bimanual
+
+# franka-controller transport
+inspect-robots-franka-preflight --embodiment franka_bimanual_robotenv \
+    --policy agent -P model=openai/gpt-6-astra
+inspect-robots doctor --embodiment franka_bimanual_robotenv
+```
+
+Preflight constructs the policy with the same `-P` arguments a run would use,
+binds it to the embodiment's declared spaces, and reports compatibility.
+`doctor` audits the declarations that the agent policy and the default
+guardrails depend on. Neither touches hardware. Then:
+
+```bash
+inspect-robots "hand the red block from the left arm to the right arm" \
+    --policy agent --embodiment franka_bimanual -P model=openai/gpt-6-astra
+inspect-robots "stack both cubes on the plate" \
+    --policy agent --embodiment franka_bimanual -P model=anthropic/claude-fable-5-1
+
+# after the port 9000 wizard reports both gRPC services healthy
+inspect-robots "hand the red block from the left arm to the right arm" \
+    --policy agent --embodiment franka_bimanual_robotenv \
+    -P model=openai/gpt-6-astra
+
+# use RobotEnv's 16-D absolute joint-position control instead
+inspect-robots "hand the red block from the left arm to the right arm" \
+    --policy agent --embodiment franka_bimanual_robotenv \
+    -E control_mode=joint_pos -P model=openai/gpt-6-astra
+```
+
+To test homing, cameras, logs, and video export without an API key, run the
+API-free hold policy. It emits zero Cartesian deltas for RobotEnv (or echoes the
+observed 16-D joint state for the direct embodiment) and does not interpret the
+instruction:
+
+```bash
+inspect-robots run --instruction "record the stationary bimanual rig" \
+    --policy bimanual_hold --embodiment franka_bimanual_robotenv --max-steps 75
+```
+
+Keep the log renderer running beside `inspect-robots view --serve` to create
+camera MP4s and replace each completed live page with a video-enabled static
+report automatically:
+
+```bash
+python scripts/watch_logs.py logs
+```
+
+For the agent policy, set `transcript_echo = true` under `[policy.args]` to
+also print each model note and tool call in the rollout terminal. The HTML log
+records the transcript regardless of that terminal-only setting; provider APIs
+do not expose private chain-of-thought.
+
+### Two-arm behavior:
+
+- **One action, both arms.** The direct embodiment clamps a 16-D joint target.
+  RobotEnv clamps an 8-D Cartesian-delta command and sends each arm's XYZ delta
+  through RCI's existing IK path while holding orientation fixed.
+- **Homing and parking are sequential.** `reset()` homes the left arm, then the
+  right, each blocking until it arrives, after one stand-clear prompt covering
+  both. `close()` parks in the same order and disconnects every connected arm
+  even when a park or another disconnect fails.
+- **No inter-arm collision check.** Bounds limit each command, not the accumulated
+  workspace. Keep the
+  workspaces separated, or add a collision check, before unattended runs. The
+  embodiment docs tell the model to keep the hands apart and to move one arm at
+  a time when they are close.
+- **Per-arm gripper gating.** Each hand keeps its own `gripper_deadband` state.
+- **Config slicing.** `BimanualFrankaConfig.arm_config("left")` returns the
+  `FrankaConfig` that drives one side, so the single-arm driver factory,
+  validation rules, and FR3 defaults serve both arms. Validation errors name the
+  arm. Panda owners override `joint_low` and `joint_high` for both halves.
+
+### `BimanualFrankaConfig` fields:
+
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `left_hostname`, `right_hostname` | `None` | FCI addresses, or `host:port` RobotEnv endpoints, both required at `reset()` |
+| `joint_low`, `joint_high`, `home_pose`, `rest_pose` | single-arm defaults, tiled | 16-D, left half first |
+| `exterior_cam_device`, `left_wrist_cam_device`, `right_wrist_cam_device` | `None` | Builtin OpenCV devices, all-or-none |
+| every other field | as `FrankaConfig` | Shared by both arms |
 
 ## Safety:
 

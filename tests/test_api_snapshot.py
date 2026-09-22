@@ -5,6 +5,11 @@ import re
 import inspect_robots_franka
 
 EXPECTED_API = {
+    "BimanualFrankaConfig",
+    "BimanualFrankaEmbodiment",
+    "BimanualRobotEnvEmbodiment",
+    "BIMANUAL_DIM_LABELS",
+    "BIMANUAL_TOTAL_DIM",
     "FrankaConfig",
     "OpenpiConfig",
     "FrankaEmbodiment",
@@ -12,6 +17,7 @@ EXPECTED_API = {
     "OperatorIO",
     "STATE_KEY",
     "TOTAL_DIM",
+    "Y_FRAME_ROBOTIQ_HOME_POSE",
     "DIM_LABELS",
     "build",
     "run_preflight",
@@ -32,5 +38,11 @@ def test_version_is_tag_derived_shape() -> None:
 def test_entry_points_resolve() -> None:
     from inspect_robots.registry import resolve
 
+    assert resolve("policy", "bimanual_hold").info.action_space.dim == 16
     assert resolve("policy", "openpi").info.name == "openpi"
     assert resolve("embodiment", "franka").info.name == "franka"
+    assert resolve("embodiment", "franka_bimanual").info.name == "franka_bimanual"
+    assert resolve("embodiment", "franka_bimanual").info.action_space.dim == 16
+    robotenv = resolve("embodiment", "franka_bimanual_robotenv")
+    assert robotenv.info.name == "franka_bimanual_robotenv"
+    assert robotenv.info.action_space.dim == 8
